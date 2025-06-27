@@ -9,18 +9,14 @@
     <!-- Inter Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        html, body, #root {
-            height: 100%; /* Ensure html, body, and root div take full height */
-            margin: 0;
-            overflow: hidden; /* Prevent overall scrolling from internal elements */
-        }
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f1f1f1; /* Default background */
+            /* Default background - will be overridden by React state */
+            background-color: #f1f1f1;
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
-            /* Transition will be handled by React for background-image/color */
+            transition: background-color 0.3s ease, background-image 0.3s ease;
         }
         /* Custom scrollbar for better aesthetics */
         ::-webkit-scrollbar {
@@ -39,7 +35,7 @@
         }
     </style>
 </head>
-<body class="min-h-screen">
+<body>
     <div id="root"></div>
 
     <!-- React CDN -->
@@ -54,20 +50,23 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // IMPORTANT NOTE: YOU MUST REPLACE THE FOLLOWING PLACEHOLDER VALUES WITH YOUR ACTUAL FIREBASE PROJECT CONFIGURATION.
-        // THIS IS THE MOST COMMON REASON FOR A BLANK APP SCREEN.
-        // You can find these in your Firebase Project Settings (gear icon) -> "Your apps" section -> Web App.
+        // IMPORTANT: Replace the following placeholder values with your actual Firebase project configuration.
+        // You can find these in your Firebase Project Settings -> "Your apps" section.
         const YOUR_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyA2ygZbOFBq9K4cNgpL4crKj5-RfN3u-9I", // <--- REPLACE THIS WITH YOUR ACTUAL API KEY
-            authDomain: "my-chat-app-639c8.firebaseapp.com", // e.g., "your-project-id.firebaseapp.com"
-            projectId: "my-chat-app-639c8", // e.g., "your-project-id"
+            apiKey: "AIzaSyA2ygZbOFBq9K4cNgpL4crKj5-RfN3u-9I", // CRITICAL: YOU MUST REPLACE "YOUR_API_KEY" WITH YOUR ACTUAL FIREBASE API KEY.
+                                    //      This is the source of the "auth/api-key-not-valid" error.
+                                    //      Find it in Firebase Console -> Project settings (gear icon) -> General -> Your apps -> Web App.
+            authDomain: "my-chat-app-639c8.firebaseapp.com", // e.g., "my-chat-app-12345.firebaseapp.com"
+            projectId: "my-chat-app-639c8", // e.g., "my-chat-app-12345"
             storageBucket: "my-chat-app-639c8.appspot.com",
             messagingSenderId: "1072114417951",
-            appId: "1:1072114417951:web:52864b2162e8bc873bf02a"
+            appId: "1:1072114417951:web:52864b2162e8bc873bf02a" // e.g., "1:234567890:web:abcdef1234567890abcdef"
         };
 
+        // You generally won't have an initialAuthToken when running standalone
+        // unless you're implementing a custom authentication flow.
         // For local testing, anonymous sign-in will be used by default if null.
-        const YOUR_INITIAL_AUTH_TOKEN = null; // Keep this as null for initial setup unless using custom tokens
+        const YOUR_INITIAL_AUTH_TOKEN = null; // Keep this as null for initial setup
 
         // Make Firebase functions and variables globally accessible for the Babel script
         // Firebase services are initialized ONLY ONCE here.
@@ -194,7 +193,6 @@
 
             // State for custom system messages
             const [systemMessage, setSystemMessage] = useState(null);
-            const [firebaseError, setFirebaseError] = useState(null); // New state for Firebase errors
 
             // Function to show custom message
             const showSystemMessage = (message, type = 'info') => {
@@ -205,19 +203,10 @@
 
             // Initialize Firebase and handle authentication
             useEffect(() => {
-                // Set initial Firebase instances from global window object
                 setDb(window.db);
                 setAuth(window.auth);
 
-                // Add a timeout to check if Firebase is not initializing
-                const initTimeout = setTimeout(() => {
-                    if (!window.db || !window.auth) {
-                        setFirebaseError("Firebase did not initialize. Please ensure your Firebase config (especially API Key) is correct and billing is enabled for all required services (e.g., Firestore).");
-                    }
-                }, 5000); // 5 seconds timeout
-
                 const unsubscribe = window.onAuthStateChanged(window.auth, async (user) => {
-                    clearTimeout(initTimeout); // Clear timeout if auth state changes
                     if (user) {
                         setUserId(user.uid);
                     } else {
@@ -236,10 +225,6 @@
                         }
                     }
                     setIsAuthReady(true);
-                }, (error) => {
-                    // Handle Firebase auth errors during initialization
-                    console.error("Firebase Auth Error:", error);
-                    setFirebaseError(`Firebase Auth Error: ${error.message}. Please check your API Key and network.`);
                 });
 
                 // Initialize AudioContext only once. It will be suspended initially by browsers.
@@ -254,7 +239,6 @@
 
                 return () => {
                     unsubscribe();
-                    clearTimeout(initTimeout); // Ensure timeout is cleared on component unmount
                     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
                         audioContextRef.current.close().catch(e => console.error("Error closing AudioContext:", e));
                     }
@@ -803,25 +787,16 @@
             };
 
 
-            if (!isAuthReady || !userId || !db || !auth) {
+            if (!isAuthReady || !userId) {
                 return (
-                    <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter p-4 text-center">
-                        {firebaseError ? (
-                            <div className="text-red-600 bg-red-100 border border-red-300 p-6 rounded-lg shadow-md max-w-sm">
-                                <h2 className="text-xl font-bold mb-3">Initialization Error</h2>
-                                <p className="text-lg">{firebaseError}</p>
-                                <p className="mt-4 text-sm">Please ensure your Firebase configuration (especially the API Key) is correct and your device has a stable internet connection.</p>
-                            </div>
-                        ) : (
-                            <div className="text-xl text-gray-700">Loading application...</div>
-                        )}
+                    <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
+                        <div className="text-xl text-gray-700">Loading application...</div>
                     </div>
                 );
             }
 
             return (
-                // Changed min-h-screen to h-screen for better mobile compatibility in some contexts
-                <div className="h-screen flex flex-col font-inter text-gray-800">
+                <div className="min-h-screen flex flex-col font-inter text-gray-800">
                     {/* System Message Display */}
                     {systemMessage && (
                         <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 text-white ${systemMessage.type === 'error' ? 'bg-red-500' : systemMessage.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'}`}>
@@ -891,11 +866,9 @@
                     </header>
 
                     {/* Main Content Area */}
-                    {/* Changed flex-1 to h-full for more reliable height calculation on mobile */}
-                    <div className="flex flex-1 h-full overflow-hidden p-4">
+                    <div className="flex flex-1 overflow-hidden p-4">
                         {/* Contacts & Groups List */}
-                        {/* Adjusted w-1/3 to w-full sm:w-1/3 for mobile first responsiveness */}
-                        <div className="w-full sm:w-1/3 bg-white rounded-l-lg shadow-lg flex flex-col overflow-hidden">
+                        <div className="w-1/3 bg-white rounded-l-lg shadow-lg flex flex-col overflow-hidden">
                             <div className="p-4 border-b border-gray-200">
                                 <h2 className="text-xl font-semibold mb-3">Chats</h2>
                                 <div className="flex space-x-2 mb-3">
@@ -975,10 +948,7 @@
                         </div>
 
                         {/* Chat Window */}
-                        {/* Adjusted w-2/3 to hidden sm:w-2/3 for mobile first responsiveness */}
-                        {/* Added w-full and block sm:flex to ensure it takes full width on small screens and becomes flex on larger */}
-                        {/* Only show on mobile if a chat is selected, otherwise hide. */}
-                        <div className={`w-full ${selectedChat ? 'block' : 'hidden'} sm:w-2/3 bg-white rounded-r-lg shadow-lg flex-col sm:flex`}>
+                        <div className="w-2/3 bg-white rounded-r-lg shadow-lg flex flex-col">
                             {selectedChat ? (
                                 <>
                                     <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-tr-lg">
@@ -1383,4 +1353,3 @@
     </script>
 </body>
 </html>
-
